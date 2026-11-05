@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karta Medycznych Czynności Ratunkowych</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1e1e2f;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .toolbar {
+            position: sticky;
+            top: 10px;
+            z-index: 1000;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: #2a2a40;
+            padding: 12px 24px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-mode {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-mode.active {
+            background-color: #1d4ed8;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+        }
+
+        .btn-pdf {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .btn-pdf:hover {
+            background-color: #059669;
+        }
+
+        .btn-clear {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        .btn-clear:hover {
+            background-color: #dc2626;
+        }
+
+        .status-info {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-left: 10px;
+        }
+
+        #pdfExportArea {
+            background-color: #ffffff;
+            width: 850px;
+            height: 1200px;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .kmcr-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 850px;
+            height: 1200px;
+            object-fit: fill;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .mark-x {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            font-size: 12px;
+            font-weight: 900;
+            font-family: Arial, sans-serif;
+            color: #000000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            line-height: 1;
+            transform: translate(-50%, -50%);
+        }
+
+        .text-field {
+            position: absolute;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+            font-weight: bold;
+            color: #000000;
+            width: 40px;
+            transform: translateY(-50%);
+        }
+
+        .text-field:focus {
+            background: rgba(239, 246, 255, 0.9);
+            border-bottom: 1px dashed #3b82f6;
+            z-index: 100;
+        }
+
+        @media print {
+            body {
+                background: none !important;
+                padding: 0 !important;
+            }
+            .toolbar {
+                display: none !important;
+            }
+            #pdfExportArea {
+                box-shadow: none !important;
+                width: 100% !important;
+                height: 100vh !important;
+            }
+            .text-field {
+                border: none !important;
+                background: transparent !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <button id="btnX" class="btn btn-mode active" onclick="setMode('x')">Tryb: Zaznaczanie (X)</button>
+        <button id="btnText" class="btn btn-mode" onclick="setMode('text')">Tryb: Pisanie Tekstu</button>
+        <button class="btn btn-pdf" onclick="exportToPDF()">Zapisz do PDF</button>
+        <button class="btn btn-clear" onclick="clearAll()">Wyczyść wszystko</button>
+        <span id="statusInfo" class="status-info">Tryb: Kliknij na karcie, aby postawić mały krzyżyk (X)</span>
+    </div>
+
+    <div id="pdfExportArea">
+        <img src="kmcr_page.png" alt="Karta KMCR" class="kmcr-bg" id="kmcrImage">
+    </div>
+
+    <script>
+        let currentMode = 'x';
+        const exportArea = document.getElementById('pdfExportArea');
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('btnX').classList.toggle('active', mode === 'x');
+            document.getElementById('btnText').classList.toggle('active', mode === 'text');
+            
+            const info = document.getElementById('statusInfo');
+            if (mode === 'x') {
+                info.innerText = 'Tryb: Kliknij na karcie, aby postawić/usunąć mały krzyżyk (X)';
+            } else {
+                info.innerText = 'Tryb: Kliknij na karcie, aby utworzyć pole do pisania tekstu';
+            }
+        }
+
+        exportArea.addEventListener('click', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.classList.contains('mark-x')) {
+                return;
+            }
+
+            const rect = exportArea.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (currentMode === 'x') {
+                const mark = document.createElement('div');
+                mark.className = 'mark-x';
+                mark.innerText = '✕';
+                mark.style.left = x + 'px';
+                mark.style.top = y + 'px';
+
+                mark.addEventListener('click', function(ev) {
+                    ev.stopPropagation();
+                    mark.remove();
+                });
+
+                exportArea.appendChild(mark);
+            } else if (currentMode === 'text') {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'text-field';
+                input.style.left = x + 'px';
+                input.style.top = y + 'px';
+
+                // Precyzyjne dopasowanie szerokości pola w locie do wpisywanego tekstu
+                const updateWidth = () => {
+                    const tempSpan = document.createElement('span');
+                    tempSpan.style.font = window.getComputedStyle(input).font;
+                    tempSpan.style.visibility = 'hidden';
+                    tempSpan.style.position = 'absolute';
+                    tempSpan.textContent = input.value || input.placeholder || 'A';
+                    document.body.appendChild(tempSpan);
+                    const textWidth = tempSpan.getBoundingClientRect().width;
+                    document.body.removeChild(tempSpan);
+
+                    // Ustawiamy nową szerokość z zapasem na marginesy
+                    input.style.width = Math.max(40, textWidth + 15) + 'px';
+                };
+
+                input.addEventListener('input', updateWidth);
+
+                input.addEventListener('blur', function() {
+                    if (input.value.trim() === '') {
+                        input.remove();
+                    }
+                });
+
+                exportArea.appendChild(input);
+                updateWidth();
+                setTimeout(() => input.focus(), 50);
+            }
+        });
+
+        function clearAll() {
+            if (confirm('Czy na pewno chcesz usunąć wszystkie naniesione dane i krzyżyki?')) {
+                const marks = exportArea.querySelectorAll('.mark-x, .text-field');
+                marks.forEach(el => el.remove());
+            }
+        }
+
+        function exportToPDF() {
+            const inputs = exportArea.querySelectorAll('.text-field');
+            inputs.forEach(input => input.setAttribute('value', input.value));
+
+            if (typeof html2pdf !== 'undefined') {
+                const opt = {
+                    margin: 0,
+                    filename: 'KMCR_Wypelniona.pdf',
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, allowTaint: true },
+                    jsPDF: { unit: 'pt', format: [850, 1200], orientation: 'portrait' }
+                };
+                
+                html2pdf().set(opt).from(exportArea).save().catch(err => {
+                    console.log("Błąd html2pdf, używam metody awaryjnej:", err);
+                    fallbackPrintPDF();
+                });
+            } else {
+                fallbackPrintPDF();
+            }
+        }
+
+        function fallbackPrintPDF() {
+            alert("Uruchamianie systemowego zapisu PDF.\nW oknie, które się pojawi, wybierz Drukarkę: 'Zapisz jako PDF' (Save as PDF).");
+            window.print();
+        }
+    </script>
+
+</body>
+</html>
